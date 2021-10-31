@@ -1,6 +1,20 @@
 const express = require('express');
 const crypto = require('crypto');
 const cors = require('cors');
+const knex = require('knex');
+
+const db = knex({
+  client: 'pg',
+  version: '14.0',
+  connection: {
+    host: '127.0.0.1',
+    port: 5432,
+    user: '{databaseUserName}',
+    password: '{databaseUserPassword}',
+    database: '{databaseName}'
+  }
+})
+
 
 const app = express();
 app.use(express.json())
@@ -10,32 +24,23 @@ const hash = (str) => crypto.createHmac('sha256', secret).update(str).digest('he
 
 const secret = 'super secret';
 
-const database = {
-  users: [
-    {
-      id: '123',
-      name: 'John',
-      email: 'john@gmail.com',
-      password: 'b42548e2db3492eac197044ed36c8031e120da40c4ab9413ff081090470a0863',
-      entries: 0,
-      joined: new Date(),
-    }
-  ]
-}
-
 app.get('/', (req, res) => {
   res.send('It is working')
 })
 
 app.post('/signin', (req, res) => {
   const { email, password } = req.body;
-  const user = database.users.find(user => user.email === email && hash(password) === user.password);
-  if (user) {
-    const userResponseObject = { ...user };
-    delete userResponseObject.password;
-    res.json(userResponseObject);
-  } else {
-    res.status(400).json('error loggin in')
+  if (email && password) {
+    db('login')
+      .select('email', 'hash')
+      .where('email', email)
+      .then(data => {
+        data.length && data[0].hash === hash(password) ?
+          db('users').where('email', email).then(user => res.json(user[0])).catch(err => res.status(400).status('unable to get user')) :
+          res.status(400).json('wrong credentials')
+
+      })
+      .catch(err => res.status(400).json('wrong credentials'))
   }
 })
 
@@ -43,45 +48,52 @@ app.post('/register', (req, res) => {
   const { name, email, password } = req.body;
   if (name && email && password) {
     const hashedPassword = hash(password);
-    const now = new Date();
-    const user = {
-      name,
-      email,
-      password: hashedPassword,
-      id: now.getTime(),
-      joined: now,
-      entries: 0,
-    }
-    database.users.push(user)
-    const userResponseObject = { ...user };
-    delete userResponseObject.password;
-    res.json(userResponseObject);
+    const joined = new Date();
+    db.transaction(trx => {
+      trx
+        .insert({
+          hash: hashedPassword,
+          email
+        })
+        .into('login')
+        .returning('email')
+        .then(loginEmail => {
+          trx('users')
+            .returning('*')
+            .insert({
+              email: loginEmail[0],
+              name,
+              joined,
+            })
+            .then(user => res.json(user[0]))
+        })
+        .then(trx.commit)
+        .catch(trx.rollback)
+    })
+      .catch(err => res.status(400).json('Unable to register'))
   } else {
-    res.status(400).json('error register')
+    res.status(400).json('Invalid arguments')
   }
 })
 
 app.get('/profile/:id', (req, res) => {
   const { id } = req.params;
-  const user = database.users.find(user => user.id === id)
-  if (user) {
-    const userResponseObject = { ...user };
-    delete userResponseObject.password;
-    res.json(userResponseObject);
-  } else {
-    res.status(404).json('User not found')
-  }
+  db('users')
+    // .select('*')
+    // .from('users')
+    .where('id', id)
+    .then(user => user.length ? res.json(user[0]) : res.status(404).json('Specified user not found'))
+    .catch(err => res.status(400).json('Internal error'))
 })
 
 app.put('/image', (req, res) => {
   const { id } = req.body;
-  const user = database.users.find(user => user.id === id)
-  if (user) {
-    user.entries++;
-    res.json(user.entries);
-  } else {
-    res.status(404).json('User not found')
-  }
+  db('users')
+    .where('id', id)
+    .increment('entries', 1)
+    .returning('entries')
+    .then(entries => res.json(entries[0]))
+    .catch(err => res.status(400).json('unable to get entries'))
 })
 
 app.listen(3000, () => {
