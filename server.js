@@ -27,7 +27,7 @@ app.use(cors());
 
 const secret = 'super secret';
 const hash = (str) => crypto.createHmac('sha256', secret).update(str).digest('hex');
-
+app.get('/', (req, res) => console.log('hello worlds'))
 app.post('/signin', signin.handleSignIn(db, hash))
 app.post('/register', register.handleRegister(db, hash));
 app.get('/profile/:id', profile.handleProfileGet(db));

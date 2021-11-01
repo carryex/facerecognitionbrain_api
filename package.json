@@ -4,7 +4,8 @@
   "description": "api for facerecognitionbrain",
   "main": "server.js",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "node server.js",
+    "start:dev": "nodemon server.js"
   },
   "author": "Pokinsokha Daniil",
   "license": "ISC",
