@@ -12,7 +12,7 @@ const db = knex({
   client: 'pg',
   version: '14.0',
   connection: {
-    host: '127.0.0.1',
+    host: 'postgresql-triangular-74815',
     port: 5432,
     user: 'postgres',
     password: 'teuzswk5035tua15e',
